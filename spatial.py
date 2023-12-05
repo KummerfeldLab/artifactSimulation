@@ -1,17 +1,22 @@
 import pandas
 import h5py
 from scipy.sparse import csr_matrix
-from scanpy import read_10x_h5
 
 
 def neighbors(pos, barcode):
     """
-    neighbors(pos, barcode) returns the neighbors of a spot in a
-    10x visium scan id'd by a barcode
+    returns the neighbors of a spot in a 10x visium scan id'd by a barcode
+    only provides neighboring spots where there is tissue
 
-    relies on the position dataframe's in_tissue flag
-    TODO: change the reliance on the in_tissue flag
-        so to be more generic
+    parameters:
+    ---------
+        pos: a pandas Dataframe created by reading from tissue_positions.csv
+            with the index set to barcodes
+        barcode: a barcode appearing in pos
+
+    returns:
+    ------
+        a list of neighbors of a spot
     """
     r = pos.at[barcode, 'array_row']
     c = pos.at[barcode, 'array_col']
@@ -27,31 +32,49 @@ def neighbors(pos, barcode):
 
 
 def num_neighbors(pos, barcode):
+    """ provides the number of in_tissue neighbors of a spot """
     return len(neighbors(pos, barcode))
 
 
 def border(pos):
+    """ Provides the barcodes of spots that are on the capture border
+            but only the ones with tissue present.
+
+    parameters:
+    ----------
+        pos: a pandas Dataframe created by reading from tissue_positions.csv
+            with the index set to barcodes
+
+    returns:
+    ------
+        a list of the barcodes of capture edge spots
+    """
     border_cols = [pos.array_col.min(),
                    pos.array_col.min() + 1,
                    pos.array_col.max() - 1,
                    pos.array_col.max()]
     border_rows = [pos.array_row.min(), pos.array_row.max()]
-    return pos.loc[(pos.array_col.isin(border_cols) |
-                    pos.array_row.isin(border_rows)) &
-                   (pos.in_tissue == 1)].index
+    border = pos.loc[(pos.array_col.isin(border_cols) |
+                      pos.array_row.isin(border_rows)) &
+                     (pos.in_tissue == 1)].index
+    return list(border)
 
 
 def capture_edge_distance(pos):
-    return get_border_distance(pos)
+    """ provides the distance of each spot from the edge of capture window
+        the outmost in-tissue spots are assigned a distance value of one
 
+    parameters:
+    ----------
+        pos: a pandas Dataframe created by reading from tissue_positions.csv
+            with the index set to barcodes
 
-def tissue_edge_distance(pos):
-    return edge_distance(pos)
-
-
-def get_border_distance(pos):
-    bd = pandas.Series(index=pos.index, dtype='Int32')
+    returns:
+    ------
+        a pandas Series of the distances, indexed by barcodes
+    """
     cur_dist = 1
+    bd = pandas.Series(index=pos.index, dtype='Int32')
     bd[border(pos)] = cur_dist
     while len(bd[bd.isna()]) > 0:
         n = set()
@@ -68,14 +91,20 @@ def get_border_distance(pos):
     return bd
 
 
-def edge_distance(pos):
-    """ provides a Series of the distances of each spot
-            from the edge of the tissue.
-        The Series index are the spot barcodes
-        If the spot lies on the capture border, it will have distance 0.
-        The tissue edge is determined by the in_tissue flag of pos.
-        If pos is not current to the barcodes, then the resultant
-        data will not be consistant.
+def tissue_edge_distance(pos):
+    """ provides the distances of each spot from the edge of the tissue.
+        Spots that do not contain tissue are assigned distance 0.
+        Neighbors of spots with missing tissue that do contain tissue
+        are assigned distance 1.
+
+    parameters:
+    ----------
+        pos: a pandas Dataframe created by reading from tissue_positions.csv
+            with the index set to barcodes
+
+    returns:
+    ------
+        a pandas Series of the distances, indexed by barcodes
     """
 
     edges = pandas.Series(index=pos.index, dtype='int32[pyarrow]')
@@ -98,12 +127,6 @@ def edge_distance(pos):
     return edges
 
 
-def read_hd5_dir(path):
-    pos = pandas.read_csv(path / 'spatial/tissue_positions.csv')
-    s = read_10x_h5(path / 'filtered_feature_bc_matrix.h5')
-    return s, pos.set_index('barcode')
-
-
 def strip_border(data, pos, width=2):
     """ removes the rows of data corrisponding to barcodes
         on the capture border, up do distance width from the
@@ -116,7 +139,7 @@ def strip_border(data, pos, width=2):
             width: the depth into which barcodes should be removed
     """
 
-    bd = get_border_distance(pos)
+    bd = capture_edge_distance(pos)
     data = data.loc[bd[bd > width].index]
     return data
 
