@@ -1,9 +1,6 @@
-import numpy
-import os
 import pandas
 import scanpy
-from SNPipeline.genelists import genelists
-from SNPipeline import spatial
+from artifactSimulation import spatial
 from pathlib import Path
 
 
@@ -55,91 +52,4 @@ class Sample:
     def get_barcode_neighbors(self, barcode):
         """ returns a list of all neighbors of a barcode according
         to self.positionsdf """
-
         return spatial.neighbors(self.positionsdf, barcode)
-
-    def get_neighbors(self, df, r, c):
-        """ get_neighbors() is a utilty function used by
-        get_adjacency_matrix """
-
-        n_list = list()
-        neighbor = df.loc[(df.array_col == c + 1) & (df.array_row == r)]
-        if len(neighbor) == 1:
-            n_list.append(neighbor.index.min())
-        neighbor = df.loc[(df.array_col == c + 1) & (df.array_row == r + 1)]
-        if len(neighbor) == 1:
-            n_list.append(neighbor.index.min())
-        neighbor = df.loc[(df.array_col == c + 1) & (df.array_row == r - 1)]
-        if len(neighbor) == 1:
-            n_list.append(neighbor.index.min())
-
-        return n_list
-
-    def build_adjacency_matrix(self):
-        """ Used by get_adjacency_matrix to build adjacency matrix
-        if it does not exist """
-        positions = self.get_positions()
-        barcodes = positions.index.to_list()
-        s = {bc: numpy.zeros(shape=len(barcodes)) for bc in barcodes}
-        df = pandas.DataFrame(s, index=barcodes)
-        for bc in barcodes:
-            col = positions.at[bc, 'array_col']
-            row = positions.at[bc, 'array_row']
-
-            for neighbor in self.get_neighbors(self.positionsdf, row, col):
-                df.loc[bc, neighbor] = 1
-                df.loc[neighbor, bc] = 1
-
-        return df
-
-    def get_adjacency_matrix(self):
-        """ Reads in the adjacency matrix and trims it
-        to be specific to this tissue sample """
-        adj_fname = 'adjacencyMatrix.csv.gz'
-        adj_path = self.dirname.parent.joinpath(adj_fname)
-        if adj_fname not in os.listdir(self.dirname.parent):
-            M = self.build_adjacency_matrix()
-            M.to_csv(adj_path, compression='gzip', index=False)
-        else:
-            M = pandas.read_csv(adj_path, compression='gzip')
-        M.set_index(keys=M.columns, inplace=True)
-        M = M.loc[self.positionsdf.index, self.positionsdf.index]
-        return M
-
-    def get_genelist_population(self, gl, add_positions=True):
-        genes = genelists[gl]
-        genelist_df = pandas.DataFrame()
-        for gene in [x for x in genes if x in self.df.columns]:
-            genelist_df[gene] = self.df[gene]
-        genelist_df['Listgenes'] = genelist_df.sum(axis=1)
-        genelist_df['All'] = self.df.sum(axis=1)
-
-        numerator = genelist_df['Listgenes'].sum()
-        expected_ratio = numerator / genelist_df['All'].sum()
-
-        genelist_df['Expected'] = genelist_df['All'].mul(expected_ratio)
-        if add_positions:
-            genelist_df = genelist_df.merge(self.positionsdf,
-                                            left_index=True,
-                                            right_index=True)
-
-        return genelist_df
-
-    def permute(self, nperms=200):
-        df = self.df.copy()
-        ed = self.edgeDistance
-        maxdist = ed.max()
-        barcodes = {x: ed[ed == x].index for x in range(1, maxdist)}
-        newindex = df.index.values
-        m = []
-        s = []
-        for _ in range(nperms):
-            numpy.random.shuffle(newindex)
-            df = df.set_index(newindex)
-            drange = range(1, ed.max())
-            means = {i: df.loc[barcodes[i]].sum(axis=1).mean() for i in drange}
-            drange = range(1, ed.max())
-            stds = {i: df.loc[barcodes[i]].sum(axis=1).std() for i in drange}
-            m.append(pandas.Series(means))
-            s.append(pandas.Series(stds))
-        return pandas.concat(m, axis=1), pandas.concat(s, axis=1)
