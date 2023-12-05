@@ -5,7 +5,6 @@ import scanpy
 from SNPipeline.genelists import genelists
 from SNPipeline import spatial
 from pathlib import Path
-from ckmeans_1d_dp import ckmeans
 
 
 class Sample:
@@ -25,44 +24,33 @@ class Sample:
         positions_f = 'tissue_positions.csv'
         sampledir = Path(dirname)
         self.sample = sampledir.name
-        msi_name = 'filtered_feature_bc_matrix'
-        positions_source = Path(dirname) / positions_f
-        if sampledir.joinpath(msi_name).exists():
-            sampledir = sampledir.joinpath(msi_name)
-            positions_source = Path(dirname).joinpath('spatial')
-            if positions_source.joinpath(positions_f)
-                positions_source = positions_source.joinpath(positions_f)
-            else:
-                positions_source = positions_source.joinpath(old_postions_f)
-        self.ann = scanpy.read_10x_mtx(sampledir, cache=True)
+        hd5_name = 'filtered_feature_bc_matrix.mtx.gz'
+        mtx_name = 'matrix.mtx.gz'
+
+        if sampledir.joinpath(hd5_name).exists():
+            self.ann = scanpy.read_10x_h5i(sampledir / hd5_name)
+        elif sampledir.joinpath(mtx_name).exists():
+            self.ann = scanpy.read_10x_mtx(sampledir, cache=True)
+        else:
+            raise ValueError('No 10X data found at ' + sampledir.path)
         self.df = self.ann.to_df()
 
-        if genelist is not None:
-            self.df = self.df[genelist]
+        positions_source = sampledir
+        if sampledir.joinpath('spatial').exits():
+            positions_source = sampledir / 'spatial'
+
+        if positions_source.joindir(old_postions_f).exists():
+            positions_source = positions_source / old_postions_f
+        elif positions_source.joindir(positions_f).exists():
+            positions_source = positions_source / positions_f
 
         self.positionsdf = pandas.read_csv(positions_source, engine='pyarrow')
         self.positionsdf.set_index('barcode', inplace=True)
         self.positionsdf.sort_values(['array_col', 'array_row'], inplace=True)
 
-    def get_edge_distance(self):
-        edges = pandas.Series(index=self.positionsdf.index, dtype='float64')
-        edges[edges.isna()] = numpy.inf
-        zero_idx = self.positionsdf[self.positionsdf.in_tissue == 0].index
-        edges[zero_idx] = 0
-
-        cur_dist = 0
-        inf_edges = edges[numpy.isinf(edges)].index
-        while len(inf_edges) > 0:
-            neighbors = set()
-            cur_index = edges[edges == cur_dist].index
-            for barcode in cur_index:
-                neighbors.update(self.get_barcode_neighbors(barcode))
-
-            neighbors.intersection_update(inf_edges)
-            edges[list(neighbors)] = cur_dist + 1
-            inf_edges = edges[numpy.isinf(edges)].index
-            cur_dist += 1
-        return edges.astype('int32')
+    def tissue_edge_distance(self):
+        """provides a pandas.Series of tissue edge distances of the spots"""
+        return spatial.tissue_edge_distance(self.positionsdf)
 
     def get_barcode_neighbors(self, barcode):
         """ returns a list of all neighbors of a barcode according
