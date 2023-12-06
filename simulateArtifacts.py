@@ -1,6 +1,8 @@
-from SNPipeline import spatial
+from artifactSimulation import spatial, sample
 import random
 import numpy
+import pandas
+from pathlib import Path
 
 
 def machine_spots(positions):
@@ -131,7 +133,41 @@ def make_fake_sample(df, pos):
     return df, pos
 
 
+def high_frequency_gene_table(topdir, sample_genes=200):
+    """ create a table of gene frequencies from a directory of samples.
+    It is assumed that each subdirectory of `topdir` is a 10X sample directory.
+
+    paramters:
+    ---------
+        topdir: a Path of a string of the path to a directory containing 10X
+            sample directories
+        sample_genes: the number of genes to select from each sample
+            genes are selected by appearing in the highest number of
+            spots in each sample
+
+    returns:
+    -------
+        a DataFrame with the names of the 
+    """
+    topdir = Path(topdir)
+    frequencies = dict()
+
+    # Loop through samples and collect a dictionaries of the highest
+    # frequency genes in each sample
+    for sampledir in topdir.iterdir():
+        s = sample.Sample(sampledir)
+        df = s.df.copy()
+        df[df > 0] = 1
+        top_genes = df.sum().sort_values(ascending=False).head(sample_genes)
+        freqs = {k: df[k].sum() / len(df) for k in list(top_genes)}
+        frequencies[sampledir.name] = freqs
+
+    gene_freqs = pandas.DataFrame(frequencies)
+
+
 def tissue_summary(name, status, pos):
+    """ Not sure why this is here
+    """
     tissue_edge_distances = spatial.tissue_edge_distance(pos)
     capture_edge_distances = spatial.capture_edge_distance(pos)
     summary = dict()
