@@ -1,6 +1,4 @@
 from SNPipeline import spatial
-from scanpy import read_10x_h5
-from bokeh.io import export_png
 import random
 import numpy
 
