@@ -6,6 +6,10 @@ import numpy
 def machine_spots(positions):
     """
     selects barcodes for inducing machine artifacts
+    First it chooses a random spot with a minimum distance of 3
+    from any edge (tissue or capture border).
+    Next it adds all of it's neighbors, then the neighbors of one of
+    it's neighbors
 
     parameters:
     ---------
@@ -90,46 +94,22 @@ def strip_sample(df, pos):
     return df, pos
 
 
-def induce_mean_shift(pos, df, distance, edgetype='capture', excludes=[]):
-    """
-
-    paramters:
-    ---------
-        pos: a pandas Dataframe from a file like tissue_positions.csv
-        df: a pandas Dataframe from a 10x Slide
-            the index is barcodes
-            the columns are gene aliases
-        distance: the distance from the edge that should be induced
-        edgetype: whether to induce capture border spots,
-                  or rather tissue edge spots
-        excludes: a set of barcodes not to induce, even if they would
-                    otherwise meet edgetype and distance criteria
-
-    """
-    TISSUE_MEANS = (0.9661, 1.1028)
-    CAPTURE_MEANS = (1.4504, 1.0499)
-
-    if distance < 1 or distance > 2:
-        raise ValueError("Distance must be 1 or 2")
-
-    if edgetype == 'capture':
-        ed = spatial.capture_edge_distance(pos)
-        induction_mean = CAPTURE_MEANS[distance - 1]
-    elif edgetype == 'tissue':
-        ed = spatial.tissue_edge_distance(pos)
-        induction_mean = TISSUE_MEANS[distance - 1]
-    else:
-        raise ValueError("edgetype must be `capture` or `tissue`")
-
-    barcodes = [x for x in ed[ed == distance].index if x not in excludes]
-    df.loc[barcodes] = df.loc[barcodes].mul(induction_mean)
-    df = df.round()
-
-    return df, list(barcodes), list(barcodes) + excludes
-
-
 def make_fake_sample(df, pos):
+    """ alters a 10x sample by removing it's capture edge and tissue edges
+    and then shifts the sample horizontally and vertically so that it has
+    a capture edge. Also updates the positions dataframe.
+
     # TODO: add in catches for when tissue sample is too small
+
+    parameters:
+    ---------
+        df: a pandas Dataframe from a 10X visium sample
+            (hint: use the sample.py file)
+        pos: a pandas Dataframe from a file like tissue_positions.csv
+            with barcodes set as the index
+
+    returns: the altered df and pos (as a pair)
+    """
     df, pos = strip_sample(df, pos)
     vert_shift = random.choice([-2, 2])
     horiz_shift = random.choice([-2, 2])
