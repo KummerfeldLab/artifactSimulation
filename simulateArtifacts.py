@@ -1,4 +1,5 @@
 from artifactSimulation import spatial, sample
+from sklearn.preprocessing import QuantileTransformer
 import random
 import numpy
 import pandas
@@ -133,7 +134,7 @@ def make_fake_sample(df, pos):
     return df, pos
 
 
-def high_frequency_gene_table(topdir, sample_genes=200):
+def select_genes(topdir, sample_genes=200, return_table=False, num_genes=100):
     """ create a table of gene frequencies from a directory of samples.
     It is assumed that each subdirectory of `topdir` is a 10X sample directory.
 
@@ -144,10 +145,19 @@ def high_frequency_gene_table(topdir, sample_genes=200):
         sample_genes: the number of genes to select from each sample
             genes are selected by appearing in the highest number of
             spots in each sample
+        return_table: `interrupts` the function to return the gene frequency
+            table
+            May inform decisions about which values to assign to the parameters
+            `sample_genes` and `num_genes`
+        num_genes: the number of genes to return
 
     returns:
     -------
-        a DataFrame with the names of the 
+        if return_table is True, then returns a DataFrame with the names of the
+            samples as columns, and indexed by the genes, with the appearance
+            percentage as entries
+        otherwise returns a list of gene names
+
     """
     topdir = Path(topdir)
     frequencies = dict()
@@ -163,20 +173,77 @@ def high_frequency_gene_table(topdir, sample_genes=200):
         frequencies[sampledir.name] = freqs
 
     gene_freqs = pandas.DataFrame(frequencies)
+    if return_table:
+        return gene_freqs
+
+    top = freqs.count(axis=1).sort_values(ascending=False).head(num_genes)
+    return list(top.index)
 
 
-def tissue_summary(name, status, pos):
-    """ Not sure why this is here
+def fit_transformers(topdir, genes):
     """
-    tissue_edge_distances = spatial.tissue_edge_distance(pos)
-    capture_edge_distances = spatial.capture_edge_distance(pos)
-    summary = dict()
-    summary['sample'] = name
-    summary['status'] = status
-    summary['spots'] = len(pos[pos.in_tissue == 1])
-    summary['border_one'] = len(capture_edge_distances[capture_edge_distances == 1])
-    summary['border_two'] = len(capture_edge_distances[capture_edge_distances == 2])
-    summary['edge_one'] = len(tissue_edge_distances[tissue_edge_distances == 1])
-    summary['edge_two'] = len(tissue_edge_distances[tissue_edge_distances == 2])
+    paramters:
+    ---------
+        topdir: a Path of a string of the path to a directory containing 10X
+            sample directories
+        genes: a List of genes whose values will be used to fit a transformer.
+            must be set when a transfomer is not provided.
+    """
 
-    return summary
+
+def simulate_edgeArtifacts(df, pos, capture_transformer=None,
+                           tissue_transformer=None):
+    """ simulate Artifacts on a 10X sample
+
+    paramters:
+    ---------
+        df: a DataFrame of a 10X sample, for example the `df` member of a
+            sample object (see sample.py for details)
+        pos: a pandas Dataframe from a file like tissue_positions.csv
+            with barcodes set as the index
+        capture_transformer: a QuantileTransformer instance to use to transform
+            the distribution of the capture edge spots of the current sample
+            If not provided, no capture edge transform will be performed.
+        tissue_transformer: a QuantileTransformer instance to use to transform
+            the distribution of the tissue edge spots of the current sample
+            If not provided, no tissue edge transform will be performed.
+
+    returns:
+    -------
+        None: all work is performed on the provided dataFrame by reference
+    """
+    if capture_transformer is None and tissue_transformer is None:
+        raise ValueError('No Transformer provided')
+
+    # Determine lists of spots that are capture edge, and those which are
+    # tissue edge
+    # In case a spot is both, remove it from list of tissue edge spots
+    edge_dist = spatial.capture_edge_distance(pos)
+    cap_barcodes = list(edge_dist[edge_dist == 1].index)
+    tissue_dist = spatial.tissue_edge_distance(pos)
+    tissue_barcodes = set(tissue_dist[tissue_dist == 1].index)
+    tissue_barcodes = list(tissue_barcodes.difference(set(cap_barcodes)))
+    both_barcodes = cap_barcodes + tissue_barcodes
+
+    # Use QuantileTransformer to `flatten` the values of the capture and
+    # tissue edge spots
+    flattener = QuantileTransformer()
+    old_values = df.loc[both_barcodes].values.reshape(-1, 1)
+    flattened = flattener.fit_transform(old_values)
+    flattened = flattened.reshape(df.loc[both_barcodes].shape)
+    df.loc[both_barcodes] = flattened
+
+    # Inverse Transform Capture Edge Spots
+    if capture_transformer is not None and len(cap_barcodes) > 0:
+        edge_values = df.loc[cap_barcodes].values.reshape(-1, 1)
+        transformed_vals = capture_transformer.inverse_transform(edge_values)
+        transformed_vals = transformed_vals.reshape(df.loc[cap_barcodes.shape])
+        df.loc[cap_barcodes] = transformed_vals
+
+    # Inverse Transform Tissue Edge Spots
+    if tissue_transformer is not None and len(tissue_barcodes) > 0:
+        edge_values = df.loc[tissue_barcodes].values.reshape(-1, 1)
+        transformed_vals = tissue_transformer.inverse_transform(edge_values)
+        new_shape = df.loc[tissue_barcodes.shape]
+        transformed_vals = transformed_vals.reshape(new_shape)
+        df.loc[tissue_barcodes] = transformed_vals
