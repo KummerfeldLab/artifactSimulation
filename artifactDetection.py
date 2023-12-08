@@ -1,5 +1,5 @@
 import pandas
-from simulateArtifacts import sample
+from simulateArtifacts import sample, spatial
 from scipy.stats import ttest_ind, kstest, mannwhitneyu
 from scipy.stats import false_discovery_control
 from pathlib import Path
@@ -11,23 +11,30 @@ def multisample_border_stats(topdir, btype='Capture'):
         all 10X samples in a directory (folder)
         The comparison is either Capture Edge spots vs interior spots,
         or tissue edge spots vs interior spots
-        If you want both tables, run twice
+        The comparison considers several 'distances' to evaluate how 'deep'
+        the effect is.
+        If you want tables for both capture edge and tissue edge, run twice,
+        changing the btype parameter
 
-    parameters
+    parameters:
     ----------
-        p: a pandas Dataframe from 10X tissue_positions.csv that includes
-        'borderDistance' and 'All'
-        btype: the type of border {'Capture', 'Tissue'} to compare
+        p: a pandas Dataframe from 10X tissue_positions.csv
+        btype: the type of artifact {'Capture', 'Tissue'} to compare
 
-    returns a dictinary of border distance to interior pvalues
+    returns:
+    -------
+        A table with columns the name of the sample and rows the statistic.
     """
     result = pandas.DataFrame()
+
     for subdir in Path(topdir).iterdir():
         if not subdir.is_dir() or '.' in subdir.name:
             continue
         s = sample.Sample(subdir)
         pos = s.positionsdf.copy(deep=True)
         pos['All'] = s.df.sum(axis=1).astype('Int64')
+        pos['Capture Edge Distance'] = spatial.capture_edge_distance(pos)
+        pos['Tissue Edge Distance'] = spatial.tissue_edge_distance(pos)
         bd = get_border_distance_pvalues(pos, btype=btype)[:9]
         bd['sample'] = subdir.name
         bd.reset_index(names='distance', inplace=True)
@@ -41,8 +48,11 @@ def get_border_distance_pvalues(p, maxdist=4, btype='Capture'):
     """
     parameters
     ----------
-        p: a pandas Dataframe from 10X tissue_positions.csv that includes
-        'borderDistance' and 'All'
+        p: a pandas Dataframe from 10X tissue_positions.csv with the following
+            additional columns:
+                'All': the sum of gene reads at the spots
+                'Tissue Edge Distance': from spatial.tissue_edge_distance()
+                'Capture Edge Distance': from spatial.capture_edge_distance()
         btype: the type of border
             {'Capture', 'Tissue'}
     returns a dictinary of border distance to interior pvalues
@@ -96,10 +106,6 @@ def get_border_distance_pvalues(p, maxdist=4, btype='Capture'):
 
             fdr = false_discovery_control(results).min()
             df.at[distance, 'fdr'] = fdr
-#           try:
-#               df.at[distance, 'fdr'] = false_discovery_control(results).min()
-#           except:
-#               print('Error:\n', results)
 
             if not isnan(df.at[distance, 'fdr']) and df.at[distance, 'fdr'] < 0.05:
                 df.at[distance, 'border_mu'] = p.loc[p.border == 'Border', 'All'].mean()
