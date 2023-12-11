@@ -21,11 +21,15 @@ class Sample:
         positions_f = 'tissue_positions.csv'
         sampledir = Path(dirname)
         self.sample = sampledir.name
+        new_s_name = 'NewSample.hd5'
         hd5_name = 'filtered_feature_bc_matrix.mtx.gz'
         mtx_name = 'matrix.mtx.gz'
 
         if sampledir.joinpath(hd5_name).exists():
-            self.ann = scanpy.read_10x_h5i(sampledir / hd5_name)
+            self.ann = scanpy.read_10x_h5(sampledir / hd5_name)
+#       elif sampledir.joinpath(new_s_name).exists():
+        elif (sampledir / new_s_name).exists():
+            self.ann = scanpy.read_10x_h5(sampledir / new_s_name)
         elif sampledir.joinpath(mtx_name).exists():
             self.ann = scanpy.read_10x_mtx(sampledir, cache=True)
         else:
@@ -33,12 +37,12 @@ class Sample:
         self.df = self.ann.to_df()
 
         positions_source = sampledir
-        if sampledir.joinpath('spatial').exits():
+        if sampledir.joinpath('spatial').exists():
             positions_source = sampledir / 'spatial'
 
-        if positions_source.joindir(old_postions_f).exists():
+        if (positions_source / old_postions_f).exists():
             positions_source = positions_source / old_postions_f
-        elif positions_source.joindir(positions_f).exists():
+        elif (positions_source / positions_f).exists():
             positions_source = positions_source / positions_f
 
         self.positionsdf = pandas.read_csv(positions_source, engine='pyarrow')
