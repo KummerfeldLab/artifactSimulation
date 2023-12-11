@@ -56,7 +56,11 @@ def induce_machine_artifacts(df, pos, spots=None):
 
     if spots is None:
         spots = machine_spots(pos)
-    df.loc[spots] *= factor
+    artifacts = df.loc[spots] * factor
+    for i in list(artifacts[artifacts.sum(axis=1) < 1].index):
+        maxcol = artifacts.loc[i].idxmax()
+        artifacts.at[i, maxcol] = 1
+    df.loc[spots] = artifacts
     return df
 
 
