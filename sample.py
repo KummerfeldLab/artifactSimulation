@@ -27,13 +27,12 @@ class Sample:
 
         if sampledir.joinpath(hd5_name).exists():
             self.ann = scanpy.read_10x_h5(sampledir / hd5_name)
-#       elif sampledir.joinpath(new_s_name).exists():
         elif (sampledir / new_s_name).exists():
             self.ann = scanpy.read_10x_h5(sampledir / new_s_name)
-        elif sampledir.joinpath(mtx_name).exists():
+        elif (sampledir / mtx_name).exists():
             self.ann = scanpy.read_10x_mtx(sampledir, cache=True)
         else:
-            raise ValueError('No 10X data found at ' + sampledir.path)
+            raise ValueError('No 10X data found at ' + str(sampledir))
         self.df = self.ann.to_df()
 
         positions_source = sampledir
