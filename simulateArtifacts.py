@@ -37,7 +37,7 @@ def machine_spots(positions):
 
 def induce_machine_artifacts(df, pos, spots=None):
     """
-    alter a dataframe to have a lump of machine artifacts
+    alter a dataframe to have a lump of spots with a machine artifact
 
     paramters:
     ---------
@@ -49,18 +49,22 @@ def induce_machine_artifacts(df, pos, spots=None):
 
     returns:
     -------
-        df: the dataframe with the edge and border spots removed
-        pos: the positions dataframe with the in_tissue field updated
+        df: the dataframe with machine spots artifacted
     """
-    factor = 0.002074695
-
+    df = df.copy()
+    factor = 0.002074695  # the ratio of artifacted spots to unartifacted
+    rng = numpy.random.default_rng()
     if spots is None:
         spots = machine_spots(pos)
-    artifacts = df.loc[spots] * factor
-    for i in list(artifacts[artifacts.sum(axis=1) < 1].index):
-        maxcol = artifacts.loc[i].idxmax()
-        artifacts.at[i, maxcol] = 1
-    df.loc[spots] = artifacts
+
+    artifacts = (df.loc[spots].astype('Float64') * factor)
+    for spot in spots:
+        if artifacts.loc[spot].astype('Int64').sum() > 0:
+            df.loc[spot] = artifacts.loc[spot].astype('Int64')
+        else:
+            rand_vals = rng.random(size=df.loc[spot].shape)
+            df.loc[spot] = 0
+            df.loc[spot, artifacts.loc[spot].gt(rand_vals)] = 1
     return df
 
 
