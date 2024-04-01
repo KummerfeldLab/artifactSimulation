@@ -25,7 +25,7 @@ class Sample:
         hd5_name = 'filtered_feature_bc_matrix.mtx.gz'
         mtx_name = 'matrix.mtx.gz'
 
-        if sampledir.joinpath(hd5_name).exists():
+        if (sampledir / hd5_name).exists():
             self.ann = scanpy.read_10x_h5(sampledir / hd5_name)
         elif (sampledir / new_s_name).exists():
             self.ann = scanpy.read_10x_h5(sampledir / new_s_name)
