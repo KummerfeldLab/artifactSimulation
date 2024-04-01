@@ -1,6 +1,7 @@
 import pandas
 import h5py
 from scipy.sparse import csr_matrix
+from scipy.stats import ttest_ind
 
 
 def neighbors(pos, barcode):
@@ -197,6 +198,33 @@ def shift_up(data, pos, distance=2):
     else:
         new_data = data.set_index(keys=new_idx, drop=True)
     return new_data
+
+
+def test_and_strip(pos, df, threshold=0.05, max_distance=10):
+    """ given a positions dataframe similar to tissue_positions.csv,
+        and a dataframe from a spaceranger-processed 10X Visium result
+        test border distances and edge distances for having an abnormal
+        distribution, and return the barcodes of spots that do """
+
+    excludes = set()
+    border_dist = capture_edge_distance(pos)
+    edge_dist = tissue_edge_distance(pos)
+    for d in range(1, max_distance + 1):
+        test_spots = border_dist[border_dist == d].index
+        new_test_spots = list(set(test_spots).difference(excludes))
+        interior_spots = border_dist[border_dist > d].index
+        ttest = ttest_ind(df.loc[new_test_spots].values.flatten(),
+                          df.loc[interior_spots].values.flatten())
+        pvalue = ttest.pvalue
+        display_str = "At Border Distance = {}, the p_value is {:.4f}"
+        print(display_str.format(d, pvalue), end=" ")
+        if pvalue > threshold:
+            break
+        print('\tFail')
+        excludes.update(set(new_test_spots))
+    return excludes
+
+
 
 
 def update_positions(pos, df):
