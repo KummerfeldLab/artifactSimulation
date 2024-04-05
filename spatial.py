@@ -213,15 +213,33 @@ def test_and_strip(pos, df, threshold=0.05, max_distance=10):
         test_spots = border_dist[border_dist == d].index
         new_test_spots = list(set(test_spots).difference(excludes))
         interior_spots = border_dist[border_dist > d].index
-        ttest = ttest_ind(df.loc[new_test_spots].values.flatten(),
-                          df.loc[interior_spots].values.flatten())
+        ttest = ttest_ind(df.loc[new_test_spots].sum(axis=1),
+                          df.loc[interior_spots].sum(axis=1))
         pvalue = ttest.pvalue
         display_str = "At Border Distance = {}, the p_value is {:.4f}"
         print(display_str.format(d, pvalue), end=" ")
         if pvalue > threshold:
+            print('\tPASS')
             break
-        print('\tFail')
+        print('\tFAIL')
         excludes.update(set(new_test_spots))
+        
+    for d in range(1, max_distance + 1):
+        test_spots = edge_dist[edge_dist == d].index
+#       new_test_spots = list(set(test_spots).difference(excludes))
+        new_test_spots = test_spots
+        interior_spots = edge_dist[edge_dist > d].index
+        ttest = ttest_ind(df.loc[new_test_spots].sum(axis=1),
+                          df.loc[interior_spots].sum(axis=1))
+        pvalue = ttest.pvalue
+        display_str = "At Edge Distance = {}, the p_value is {:.4f}"
+        print(display_str.format(d, pvalue), end=" ")
+        if pvalue > threshold:
+            print('\tPASS')
+            break
+        print('\tFAIL')
+        excludes.update(set(new_test_spots))
+        
     return excludes
 
 
