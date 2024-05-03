@@ -1,5 +1,6 @@
 import pandas
 import h5py
+import numpy as np
 from scipy.sparse import csr_matrix
 from scipy.stats import ttest_ind
 
@@ -35,6 +36,35 @@ def neighbors(pos, barcode):
 def num_neighbors(pos, barcode):
     """ provides the number of in_tissue neighbors of a spot """
     return len(neighbors(pos, barcode))
+
+
+def senspot_index(sample, genelist):
+    """
+    Identifies senspots according to a given list and returns
+    the barcodes of senspots.
+    A spot is considered senescent if it's mean
+    zscore in the provided dataframe is above 2
+    """
+    s1 = sample[genelist].sum(axis=1).div(len(genelist))
+    result = list(s1[s1 > 2].index)
+    return result
+
+
+def spot_distance(tissue_positions, senspots, maxdist=6):
+    d = pandas.Series(np.inf, index=tissue_positions.index)
+    d[senspots] = 0
+    cur_d = 0
+    while (len(d[np.isinf(d)]) > 0):
+        spot_neighbors = set()
+        for spot in d[d == cur_d].index:
+            spot_neighbors.update(neighbors(tissue_positions, spot))
+        spot_neighbors = list(spot_neighbors)
+        d.loc[(d > cur_d) & (d.index.isin(spot_neighbors))] = cur_d + 1
+        cur_d += 1
+        if cur_d > maxdist:
+            break
+
+    return d
 
 
 def border(pos):
