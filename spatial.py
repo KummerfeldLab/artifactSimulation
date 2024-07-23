@@ -91,14 +91,17 @@ def border(pos):
     return list(border)
 
 
-def capture_edge_distance(pos):
-    """ provides the distance of each spot from the edge of capture window
+def capture_edge_distance(pos, width=np.nan):
+    """ provides the distance of each spot up to width -width-
+        from the edge of capture window
         the outmost in-tissue spots are assigned a distance value of one
 
     parameters:
     ----------
         pos: a pandas Dataframe created by reading from tissue_positions.csv
             with the index set to barcodes
+        width: the maximum distance from the edge to consider
+            restricting width improves processing time
 
     returns:
     ------
@@ -107,7 +110,7 @@ def capture_edge_distance(pos):
     cur_dist = 1
     bd = pandas.Series(index=pos.index, dtype='Int32')
     bd[border(pos)] = cur_dist
-    while len(bd[bd.isna()]) > 0:
+    while len(bd[bd.isna()]) > 0 and cur_dist <= width:
         n = set()
         for barcode in bd[bd == cur_dist].index:
             n.update(neighbors(pos, barcode))
@@ -170,7 +173,7 @@ def strip_border(data, pos, width=2):
             width: the depth into which barcodes should be removed
     """
 
-    bd = capture_edge_distance(pos)
+    bd = capture_edge_distance(pos, width)
     data = data.loc[bd[bd > width].index]
     return data
 
