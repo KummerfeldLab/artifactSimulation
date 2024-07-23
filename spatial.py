@@ -111,9 +111,10 @@ def capture_edge_distance(pos, width=np.nan):
     bd = pandas.Series(index=pos.index, dtype='Int32')
     bd[border(pos)] = cur_dist
     while len(bd[bd.isna()]) > 0 and cur_dist <= width:
+        cur_pos = pos.loc[bd[~ (bd < cur_dist)].index]
         n = set()
         for barcode in bd[bd == cur_dist].index:
-            n.update(neighbors(pos, barcode))
+            n.update(neighbors(cur_pos, barcode))
         n.intersection_update(bd[bd.isna()].index)
         n = list(n)
         if len(n) == 0:
