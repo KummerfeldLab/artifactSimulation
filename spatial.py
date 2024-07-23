@@ -54,15 +54,13 @@ def spot_distance(tissue_positions, senspots, maxdist=6):
     d = pandas.Series(np.inf, index=tissue_positions.index)
     d[senspots] = 0
     cur_d = 0
-    while (len(d[np.isinf(d)]) > 0):
+    while (len(d[np.isinf(d)]) > 0) and cur_d <= maxdist:
         spot_neighbors = set()
         for spot in d[d == cur_d].index:
             spot_neighbors.update(neighbors(tissue_positions, spot))
         spot_neighbors = list(spot_neighbors)
         d.loc[(d > cur_d) & (d.index.isin(spot_neighbors))] = cur_d + 1
         cur_d += 1
-        if cur_d > maxdist:
-            break
 
     return d
 
