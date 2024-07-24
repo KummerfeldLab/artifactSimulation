@@ -257,7 +257,7 @@ def test_and_strip(pos, df, threshold=0.05, max_distance=10):
             break
         print('\tFAIL')
         excludes.update(set(new_test_spots))
-        
+
     for d in range(1, max_distance + 1):
         test_spots = edge_dist[edge_dist == d].index
 #       new_test_spots = list(set(test_spots).difference(excludes))
@@ -273,10 +273,8 @@ def test_and_strip(pos, df, threshold=0.05, max_distance=10):
             break
         print('\tFAIL')
         excludes.update(set(new_test_spots))
-        
+
     return excludes
-
-
 
 
 def update_positions(pos, df):
