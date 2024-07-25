@@ -17,7 +17,7 @@ class Sample:
             (Older versions of scanpy did not support the newer filename)
 
         """
-        old_postions_f = 'tissue_positions.csv'
+        old_postions_f = 'tissue_positions_list.csv'
         positions_f = 'tissue_positions.csv'
         sampledir = Path(dirname)
         self.sample = sampledir.name
@@ -36,8 +36,8 @@ class Sample:
         self.df = self.ann.to_df()
 
         positions_source = sampledir
-        if sampledir.joinpath('spatial').exists():
-            positions_source = sampledir / 'spatial'
+#       if sampledir.joinpath('spatial').exists():
+#           positions_source = sampledir / 'spatial'
 
         if (positions_source / old_postions_f).exists():
             positions_source = positions_source / old_postions_f
