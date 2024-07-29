@@ -1,8 +1,38 @@
-import pandas
+import pandas as pd
 import h5py
 import numpy as np
 from scipy.sparse import csr_matrix
 from scipy.stats import ttest_ind
+
+
+def all_neighbors(pos, bcs):
+    """ Returns a list of barcodes of each spot that is next to
+        one or more of the provided list of barcodes """
+    n_set = set()
+    for bc in bcs:
+        n_set.update(neighbors(pos, bc))
+    return list(n_set.difference(bcs))
+
+
+def border_distance(pos, width=2):
+    """ Returns a Series of the distance of each spot from a capture
+        area border. The Series is indexed by barcodes.
+        The width parameter sets the maximum distance to find, which can
+        greatly reduce runtimes.
+        Widths greater than the specified width are assigned np.nan
+        Cells that neighbor the capture area border have a distance of one.
+    """
+    bd = pd.Series(np.inf, index=pos.index)
+    bd[border(pos)] = 1
+    cur_dist = 1
+    while cur_dist < width:
+        mask = pd.Series(np.inf, index=pos.index)
+        inner_pos = pos.loc[bd[bd >= cur_dist].index]
+        ns = all_neighbors(inner_pos, bd[bd == cur_dist].index)
+        mask[ns] = cur_dist + 1
+        bd = bd.combine(mask, min)
+        cur_dist += 1
+    return bd
 
 
 def neighbors(pos, barcode):
@@ -51,7 +81,7 @@ def senspot_index(sample, genelist):
 
 
 def spot_distance(tissue_positions, senspots, maxdist=6):
-    d = pandas.Series(np.inf, index=tissue_positions.index)
+    d = pd.Series(np.inf, index=tissue_positions.index)
     d[senspots] = 0
     cur_d = 0
     while (len(d[np.isinf(d)]) > 0) and cur_d <= maxdist:
@@ -92,7 +122,8 @@ def border(pos):
 
 
 def capture_edge_distance(pos, width=np.nan):
-    """ provides the distance of each spot up to width -width-
+    """  DEPRECATED, use boder_distance() instead
+        provides the distance of each spot up to width -width-
         from the edge of capture window
         the outmost in-tissue spots are assigned a distance value of one
 
@@ -108,7 +139,7 @@ def capture_edge_distance(pos, width=np.nan):
         a pandas Series of the distances, indexed by barcodes
     """
     cur_dist = 1
-    bd = pandas.Series(index=pos.index, dtype='Int32')
+    bd = pd.Series(index=pos.index, dtype='Int32')
     bd[border(pos)] = cur_dist
     while len(bd[bd.isna()]) > 0 and cur_dist <= width:
         cur_pos = pos.loc[bd[~ (bd < cur_dist)].index]
@@ -142,8 +173,8 @@ def tissue_edge_distance(pos):
         a pandas Series of the distances, indexed by barcodes
     """
 
-    edges = pandas.Series(index=pos.index, dtype='int32[pyarrow]')
-    edges[edges.isna()] = pandas.NA
+    edges = pd.Series(index=pos.index, dtype='int32[pyarrow]')
+    edges[edges.isna()] = pd.NA
     zero_idx = pos[pos.in_tissue == 0].index
     edges[zero_idx] = 0
 
@@ -174,9 +205,10 @@ def strip_border(data, pos, width=2):
             width: the depth into which barcodes should be removed
     """
 
-    bd = capture_edge_distance(pos, width)
-    data = data.loc[bd[bd > width].index]
-    return data
+    bd = border_distance(pos, width)
+    idx = [x for x in bd[bd > width].index if x in data.index]
+#    data = data.loc[bd[bd > width].index]
+    return data.loc[idx]
 
 
 def strip_edge(data, pos, width=2):
@@ -199,7 +231,7 @@ def strip_edge(data, pos, width=2):
 def shift_right(data, pos, distance=2):
     if distance % 2 != 0:
         raise ValueError('distance must be an even number')
-    if not type(data) in [pandas.Series, pandas.DataFrame]:
+    if not type(data) in [pd.Series, pd.DataFrame]:
         raise ValueError('data must be a pandas Series or DataFrame')
 
     on_cols = ['array_row', 'array_col']
@@ -208,8 +240,8 @@ def shift_right(data, pos, distance=2):
     altered_pos.reset_index(inplace=True)
     altered_pos.set_index(on_cols, inplace=True)
     new_idx = pos.join(altered_pos, on=on_cols, how='right').index
-    if type(data) is pandas.Series:
-        new_data = pandas.Series(data.values, index=new_idx)
+    if type(data) is pd.Series:
+        new_data = pd.Series(data.values, index=new_idx)
     else:
         new_data = data.set_index(keys=new_idx, drop=True)
     return new_data
@@ -218,7 +250,7 @@ def shift_right(data, pos, distance=2):
 def shift_up(data, pos, distance=2):
     if distance % 2 != 0:
         raise ValueError('distance must be an even number')
-    if not type(data) in [pandas.Series, pandas.DataFrame]:
+    if not type(data) in [pd.Series, pd.DataFrame]:
         raise ValueError('data must be a pandas Series or DataFrame')
 
     on_cols = ['array_row', 'array_col']
@@ -227,8 +259,8 @@ def shift_up(data, pos, distance=2):
     altered_pos.reset_index(inplace=True)
     altered_pos.set_index(on_cols, inplace=True)
     new_idx = pos.join(altered_pos, on=on_cols, how='right').index
-    if type(data) is pandas.Series:
-        new_data = pandas.Series(data.values, index=new_idx)
+    if type(data) is pd.Series:
+        new_data = pd.Series(data.values, index=new_idx)
     else:
         new_data = data.set_index(keys=new_idx, drop=True)
     return new_data
